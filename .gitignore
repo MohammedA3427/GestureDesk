@@ -6,4 +6,5 @@ models/*.npz
 models/*.task
 reports/
 work/
-all_info_readme.txt/
+all_info_readme.txt
+2nd_version_readme.txt
