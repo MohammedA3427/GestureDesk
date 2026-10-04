@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+data/
+models/*.npz
+models/*.task
+reports/
+work/
+all_info_readme.txt/
