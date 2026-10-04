@@ -4,9 +4,9 @@ A local, real-time webcam interface for the Ontario Tech Reverse Career Fair.
 
 ## Start Instructions
 
-Double-click **Start-GestureDesk.cmd**. Dependencies and Google's hand model are already installed in this folder. The launcher uses Windows DirectShow. Close Teams, Zoom and other camera users first.
+Double-click **Start-GestureDesk.cmd**. 
 
-Double-click **Start-Keyboard-Demo.cmd** for the presentation fallback. The adjacent **GestureDesk.zip** contains source, documentation, UI previews and the official hand model; it excludes this laptop's virtual environment and any user recordings.
+Double-click **Start-Keyboard-Demo.cmd** for the presentation.
 
 ## Demo controls
 
@@ -23,5 +23,3 @@ Double-click **Start-Keyboard-Demo.cmd** for the presentation fallback. The adja
 | Q / Esc | Quit |
 
 Point, fist and thumbs-up are recognized for inspection but have no destructive actions. Hold one hand fully in view. Two visible hands suspend recognition. Swipes require an open palm, mostly horizontal monotonic travel, and have an 800 ms cooldown. Peace toggles once per stable hold; a brief recognition flicker cannot repeatedly toggle it.
-
-Customize **portfolio.json** with Mohammed's verified skills, other projects and contact links. Placeholder text is deliberately explicit; no credentials or personal accomplishments are invented.

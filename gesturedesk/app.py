@@ -6,7 +6,7 @@ import uuid
 from collections import deque
 import cv2
 import numpy as np
-from .core import Engine,LABELS,features
+from .core import Engine,LABELS,features,normalize
 from .camera import Camera,Tracker
 from .model import Classifier,train
 from .ui import Dashboard
@@ -27,14 +27,19 @@ def parser():
         s.add_argument('--frames',type=int,default=0,help='Stop after N processed frames (smoke tests)')
         s.add_argument('--snapshot',type=Path)
         if name=='collect':
+            s.add_argument('--clip-seconds',type=float,default=10.,help='Auto-stop each recording after this duration')
+            s.add_argument('--sample-hz',type=float,default=5.,help='Maximum stored samples per second')
+            s.add_argument('--participant',required=True,help='Pseudonymous participant ID')
             s.add_argument('--session',default=str(uuid.uuid4()),help='One independently recorded sitting')
             s.add_argument('--output',type=Path,default=ROOT/'data/landmarks.jsonl')
     t=sub.add_parser('train')
     t.add_argument('--data',type=Path,default=ROOT/'data/landmarks.jsonl')
     t.add_argument('--output',type=Path,default=ROOT/'models/custom.npz')
     t.add_argument('--report',type=Path,default=ROOT/'reports/evaluation.json')
-    t.add_argument('--test-sessions',nargs='+',required=True)
-    t.add_argument('--validation-sessions',nargs='+',required=True)
+    t.add_argument('--test-sessions',nargs='+',default=[])
+    t.add_argument('--test-participants',nargs='+',default=[])
+    t.add_argument('--validation-participants',nargs='+',default=[])
+    t.add_argument('--validation-sessions',nargs='+',default=[])
     t.add_argument('--threshold',type=float,default=.75)
     t.add_argument('--margin',type=float,default=.15)
     return p
@@ -42,6 +47,8 @@ def parser():
 def live(args):
     if args.headless and not args.frames:
         raise ValueError('--headless requires a finite --frames limit')
+    if args.command=='collect' and (not 0 < args.sample_hz <= 10 or not 0 < args.clip_seconds <= 60):
+        raise ValueError('Use sample-hz in (0,10] and clip-seconds in (0,60]')
     if args.command=='collect' and (args.demo or args.headless):
         raise ValueError('Collection requires a real camera and interactive label controls')
     if args.frames<0:
@@ -63,7 +70,13 @@ def live(args):
             tracker=Tracker(args.hand_model)
             camera=Camera(args.camera,args.backend)
         if args.command=='collect':
-            if not args.session.strip():raise ValueError('Session cannot be empty')
+            if not args.session.strip() or not args.participant.strip():raise ValueError('Participant and session cannot be empty')
+            # Validate existing data before appending; one session belongs to one person.
+            from .model import read_rows
+            if args.output.exists() and args.output.stat().st_size:
+                for row in read_rows(args.output):
+                    if row['session']==args.session and row.get('participant')!=args.participant:
+                        raise ValueError('Session already belongs to another or legacy participant; use a new ID')
             args.output.parent.mkdir(parents=True,exist_ok=True)
             dataset=args.output.open('a',encoding='utf-8')
             print('Collection session:',args.session)
@@ -94,10 +107,13 @@ def live(args):
             if args.command!='collect':
                 ui.action(state.event)
                 ui.pen(filtered,state,size)
-            if dataset and recording and now>=record_after and points is not None and now-last_saved>=.1:
+            if dataset and recording and now >= record_after + args.clip_seconds:
+                recording=False
+            if dataset and recording and now>=record_after and points is not None and now-last_saved>=1/args.sample_hz:
                 try:
                     features(points)
-                    dataset.write(json.dumps({'version':1,'session':args.session,'label':label,
+                    dataset.write(json.dumps({'version':2,'participant':args.participant,'session':args.session,'label':label,
+                        'normalized_landmarks':normalize(points).tolist(),
                         'timestamp':captured,'hand':hand,'frame_size':size,'landmarks':points.tolist()})+'\n')
                     dataset.flush();count+=1;label_counts[label]+=1;last_saved=now
                 except ValueError:pass
@@ -145,7 +161,8 @@ def main():
     try:
         if args.command=='train':
             if not .5<=args.threshold<=1 or not 0<=args.margin<=1:raise ValueError('Invalid rejection thresholds')
-            results=train(args.data,args.output,args.report,args.test_sessions,args.validation_sessions,args.threshold,args.margin)
+            results=train(args.data,args.output,args.report,args.test_sessions,args.validation_sessions,args.threshold,args.margin,
+                          test_participants=args.test_participants,validation_participants=args.validation_participants)
             print('Saved classifier:',args.output,'\nSaved session evaluation:',args.report)
             print('Held-out test accuracy:',results['splits']['test']['metrics']['accuracy'])
         else:print('Processed frames:',live(args))

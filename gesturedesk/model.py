@@ -1,8 +1,9 @@
 """Portable numeric classifier artifact; no pickle execution on model loading."""
 from pathlib import Path
 import json
+import hashlib
 import numpy as np
-from .core import features, LABELS
+from .core import features, normalize, LABELS
 
 FEATURE_VERSION = 1
 
@@ -38,22 +39,47 @@ class Classifier:
             label = 'UNKNOWN'
         return label,score
 
-def load_dataset(path):
-    rows = []
-    for number,line in enumerate(Path(path).read_text(encoding='utf-8').splitlines(),1):
+def read_rows(path):
+    rows, owners = [], {}
+    for number, line in enumerate(Path(path).read_text(encoding='utf-8').splitlines(), 1):
         try:
             r = json.loads(line)
-            p = np.asarray(r['landmarks'],float)
-            if r['label'] not in LABELS or not isinstance(r['session'],str) or not r['session'].strip():
+            if not isinstance(r, dict):
+                raise ValueError('expected JSON object')
+            if r.get('version', 1) not in (1, 2):
+                raise ValueError('unsupported dataset version')
+            p = np.asarray(r['landmarks'], float)
+            features(p)
+            if r['label'] not in LABELS or not isinstance(r['session'], str) or not r['session'].strip():
                 raise ValueError('invalid label or session')
-            rows.append((features(p),r['label'],r['session']))
-        except (KeyError,ValueError,TypeError) as e:
+            participant = r.get('participant')
+            if participant is not None and (not isinstance(participant, str) or not participant.strip()):
+                raise ValueError('invalid participant')
+            if r.get('version', 1) == 2:
+                n = np.asarray(r['normalized_landmarks'], float)
+                if participant is None or r['hand'] not in ('Left', 'Right') or n.shape != (21, 3) or not np.allclose(n, normalize(p), atol=1e-5):
+                    raise ValueError('invalid participant, handedness or normalized landmarks')
+                if not np.isfinite(float(r['timestamp'])):
+                    raise ValueError('invalid timestamp')
+            if r['session'] in owners and owners[r['session']] != participant:
+                raise ValueError('session ID assigned to multiple participants')
+            owners[r['session']] = participant
+            rows.append(r)
+        except (KeyError, ValueError, TypeError) as e:
             raise ValueError(f'Invalid dataset row {number}: {e}') from e
     if not rows:
         raise ValueError('Dataset is empty')
-    return np.stack([r[0] for r in rows]),np.array([r[1] for r in rows]),np.array([r[2] for r in rows])
+    return rows
 
-def train(data, output, report, test_sessions, validation_sessions, threshold=.75, margin=.15):
+
+def load_dataset(path):
+    rows = read_rows(path)
+    return (np.stack([features(np.asarray(r['landmarks'], float)) for r in rows]),
+            np.array([r['label'] for r in rows]), np.array([r['session'] for r in rows]))
+
+
+def train(data, output, report, test_sessions, validation_sessions, threshold=.75, margin=.15, *,
+          test_participants=(), validation_participants=()):
     from sklearn.preprocessing import StandardScaler
     from sklearn.linear_model import LogisticRegression
     from sklearn.metrics import classification_report,confusion_matrix
@@ -61,13 +87,24 @@ def train(data, output, report, test_sessions, validation_sessions, threshold=.7
         raise ValueError('Classifier output must end in .npz')
     if not .5<=threshold<=1 or not 0<=margin<=1:
         raise ValueError('Invalid rejection thresholds')
-    x,y,groups = load_dataset(data)
-    test_sessions, validation_sessions = set(test_sessions),set(validation_sessions)
-    if not test_sessions or not validation_sessions or test_sessions & validation_sessions:
-        raise ValueError('Specify disjoint validation and test sessions')
-    if not (test_sessions | validation_sessions) <= set(groups):
-        raise ValueError('Requested held-out sessions not present in dataset')
-    masks = {'test':np.isin(groups,list(test_sessions)), 'validation':np.isin(groups,list(validation_sessions))}
+    rows = read_rows(data)
+    x = np.stack([features(np.asarray(r['landmarks'], float)) for r in rows])
+    y = np.array([r['label'] for r in rows])
+    groups = np.array([r['session'] for r in rows])
+    people = np.array([(r.get('participant') or '') for r in rows])
+    by_person = bool(test_participants or validation_participants)
+    if by_person and (test_sessions or validation_sessions):
+        raise ValueError('Choose session OR participant holdouts, not both')
+    if by_person and np.any(people == ''):
+        raise ValueError('Person evaluation requires participant IDs on every row; legacy data supports session evaluation only')
+    split_groups = people if by_person else groups
+    test_ids = set(test_participants if by_person else test_sessions)
+    validation_ids = set(validation_participants if by_person else validation_sessions)
+    if not test_ids or not validation_ids or test_ids & validation_ids:
+        raise ValueError('Specify disjoint validation and test groups')
+    if not (test_ids | validation_ids) <= set(split_groups):
+        raise ValueError('Requested held-out groups not present in dataset')
+    masks = {'test':np.isin(split_groups,list(test_ids)), 'validation':np.isin(split_groups,list(validation_ids))}
     masks['train'] = ~(masks['test'] | masks['validation'])
     classes = set(y)
     if len(classes) < 3 or 'UNKNOWN' not in classes:
@@ -86,15 +123,32 @@ def train(data, output, report, test_sessions, validation_sessions, threshold=.7
     model = Classifier(output)
     results = {'feature_version':FEATURE_VERSION,'threshold':threshold,'margin':margin,
                'note':'Fixed thresholds; validation is for development. Do not tune against test results.',
-               'classes':clf.classes_.tolist(),'splits':{}}
+               'classes':clf.classes_.tolist(),'split_unit':'participant' if by_person else 'session',
+               'dataset_sha256':hashlib.sha256(Path(data).read_bytes()).hexdigest(),
+               'legacy_rows':sum(r.get('version',1)==1 for r in rows),'splits':{}}
     for name,mask in masks.items():
         p = model.probabilities(x[mask])
         order = np.sort(p,axis=1)
         pred = model.classes[np.argmax(p,axis=1)].copy()
         pred[(order[:,-1]<threshold) | ((order[:,-1]-order[:,-2])<margin)] = 'UNKNOWN'
-        results['splits'][name] = {'sessions':sorted(set(groups[mask])), 'samples':int(mask.sum()),
+        results['splits'][name] = {'sessions':sorted(set(groups[mask])), 'participants':sorted(set(people[mask])-{''}), 'samples':int(mask.sum()),
+            'class_counts':{label:int(np.sum(y[mask]==label)) for label in clf.classes_},
+            'unknown_false_activation_rate':float(np.mean(pred[y[mask]=='UNKNOWN']!='UNKNOWN')),
+            'intentional_rejection_rate':float(np.mean(pred[y[mask]!='UNKNOWN']=='UNKNOWN')),
             'metrics':classification_report(y[mask],pred,labels=clf.classes_,output_dict=True,zero_division=0),
             'confusion_matrix':confusion_matrix(y[mask],pred,labels=clf.classes_).tolist()}
     Path(report).parent.mkdir(parents=True,exist_ok=True)
     Path(report).write_text(json.dumps(results,indent=2),encoding='utf-8')
+    write_confusion_csv(results, Path(report))
     return results
+
+
+def write_confusion_csv(results, report):
+    """Rows are true labels; columns are predictions, after rejection."""
+    import csv
+    for split, result in results['splits'].items():
+        path = report.with_name(report.stem + '-' + split + '-confusion.csv')
+        with path.open('w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['true / predicted'] + results['classes'])
+            writer.writerows([label] + row for label, row in zip(results['classes'], result['confusion_matrix']))

@@ -38,6 +38,41 @@ class ModelTests(unittest.TestCase):
             rows=[r for r in data.read_text().splitlines() if not (json.loads(r)['session']=='test' and json.loads(r)['label']=='UNKNOWN')]
             data.write_text('\n'.join(rows))
             with self.assertRaises(ValueError):train(data,d/'m.npz',d/'r.json',['test'],['validation'])
+    def test_person_holdout(self):
+        with tempfile.TemporaryDirectory() as d:
+            d=Path(d); data=d/'data.jsonl'; self.dataset(data)
+            with self.assertRaisesRegex(ValueError,'participant IDs'):
+                train(data,d/'m.npz',d/'r.json',[],[],test_participants=['p3'],validation_participants=['p2'])
+            rows=[json.loads(line) for line in data.read_text().splitlines()]
+            for row in rows:
+                row['participant']={'train-a':'p1','train-b':'p1','validation':'p2','test':'p3'}[row['session']]
+            data.write_text('\n'.join(json.dumps(r) for r in rows))
+            result=train(data,d/'m.npz',d/'r.json',[],[],test_participants=['p3'],validation_participants=['p2'])
+            self.assertEqual(result['split_unit'],'participant')
+            self.assertEqual(result['splits']['train']['participants'],['p1'])
+            self.assertEqual(result['splits']['train']['sessions'],['train-a','train-b'])
+            self.assertTrue((d/'r-test-confusion.csv').exists())
+            with self.assertRaises(ValueError):
+                train(data,d/'m.npz',d/'r.json',['test'],[],test_participants=['p3'],validation_participants=['p2'])
+            rows[0]['participant']='p3'
+            data.write_text('\n'.join(json.dumps(r) for r in rows))
+            with self.assertRaisesRegex(ValueError,'multiple participants'):
+                load_dataset(data)
+
+    def test_v2_normalization_and_metadata(self):
+        from gesturedesk.core import normalize, features
+        with tempfile.TemporaryDirectory() as d:
+            path=Path(d)/'data.jsonl'; points=hand()
+            row={'version':2,'participant':'p1','session':'s1','label':'OPEN_PALM',
+                 'hand':'Right','timestamp':1.,'landmarks':points.tolist(),
+                 'normalized_landmarks':normalize(points).tolist()}
+            path.write_text(json.dumps(row))
+            np.testing.assert_allclose(load_dataset(path)[0][0],features(points))
+            row['normalized_landmarks'][1][0]+=1
+            path.write_text(json.dumps(row))
+            with self.assertRaisesRegex(ValueError,'normalized landmarks'):
+                load_dataset(path)
+
     def test_malformed_row_fails(self):
         with tempfile.TemporaryDirectory() as d:
             path=Path(d)/'data';path.write_text('{}')
