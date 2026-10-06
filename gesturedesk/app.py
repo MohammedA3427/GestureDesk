@@ -22,6 +22,7 @@ def parser():
         s.add_argument('--backend',choices=['auto','dshow','msmf'],default='auto')
         s.add_argument('--hand-model',type=Path,default=ROOT/'models/hand_landmarker.task')
         s.add_argument('--classifier',type=Path)
+        s.add_argument('--classifier-pinch',action='store_true',help='Use the original classifier-based drawing gate')
         s.add_argument('--demo',action='store_true',help='No-camera keyboard presentation')
         s.add_argument('--headless',action='store_true')
         s.add_argument('--frames',type=int,default=0,help='Stop after N processed frames (smoke tests)')
@@ -106,7 +107,7 @@ def live(args):
             filtered,state,score=engine.update(points,captured,size,hand)
             if args.command!='collect':
                 ui.action(state.event)
-                ui.pen(filtered,state,size)
+                ui.pen(filtered,state,size,pinch_input=None if args.classifier_pinch else (points,captured,hand))
             if dataset and recording and now >= record_after + args.clip_seconds:
                 recording=False
             if dataset and recording and now>=record_after and points is not None and now-last_saved>=1/args.sample_hz:

@@ -4,7 +4,7 @@ from collections import deque
 from pathlib import Path
 import cv2
 import numpy as np
-from .core import CONNECTIONS
+from .core import CONNECTIONS,DrawingPinch
 
 BG=(19,16,12); PANEL=(34,29,23); TEXT=(239,239,225); MUTED=(163,155,135); ACCENT=(187,226,79)
 
@@ -24,6 +24,7 @@ class Dashboard:
         self.card,self.drawing,self.paused,self.debug=0,False,False,True
         self.canvas=np.zeros((360,510,3),np.uint8)
         self.last_pen=None
+        self.drawing_pinch=DrawingPinch()
         self.history=deque(maxlen=5)
     def action(self,event):
         if not event:
@@ -34,11 +35,19 @@ class Dashboard:
         if event=='SWIPE_RIGHT': self.card=(self.card+1)%len(self.portfolio['cards'])
         elif event=='SWIPE_LEFT': self.card=(self.card-1)%len(self.portfolio['cards'])
         elif event=='PEACE': self.drawing=not self.drawing; self.last_pen=None
-    def pen(self,points,state,size):
-        if self.paused or not self.drawing or points is None or state.raw!='PINCH' or state.stable!='PINCH':
+    def pen(self,points,state,size,*,pinch_input=None):
+        enabled = not self.paused and self.drawing and points is not None
+        if not enabled:
+            self.drawing_pinch.reset()
+        if pinch_input is None:
+            pinching = state.raw=='PINCH' and state.stable=='PINCH'
+        else:
+            raw, now, identity = pinch_input
+            pinching = self.drawing_pinch.update(raw,now,identity) if enabled else False
+        if not enabled or not pinching:
             self.last_pen=None
             return
-        # Map camera space to canvas; drawing stops on recognition uncertainty.
+        # Map filtered camera space to canvas; the pen gate uses raw tips for prompt release.
         pos=tuple(np.clip(points[8,:2]/np.asarray(size)*[510,360],[0,0],[509,359]).astype(int))
         if self.last_pen is not None and np.linalg.norm(np.array(pos)-self.last_pen)<100:
             cv2.line(self.canvas,self.last_pen,pos,ACCENT,4,cv2.LINE_AA)

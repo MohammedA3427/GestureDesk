@@ -176,3 +176,36 @@ class Engine:
         if swipe:
             state.event = swipe
         return filtered,state,score
+
+
+class DrawingPinch:
+    """Pen-only gate: tip distance in wrist-to-middle-MCP palm lengths."""
+    def __init__(self, close=.20, release=.32, dwell=.06):
+        self.close, self.release, self.dwell = close, release, dwell
+        self.reset()
+    def reset(self):
+        self.active, self.since, self.last_time, self.identity = False, None, None, None
+    def update(self, points, now, identity):
+        if points is None or not valid_hand(points):
+            self.reset()
+            return False
+        if (identity != self.identity or self.last_time is None
+                or not 0 <= now-self.last_time <= .25):
+            self.reset()
+        self.last_time, self.identity = now, identity
+        try:
+            p = normalize(points)
+        except ValueError:
+            self.reset()
+            return False
+        distance = np.linalg.norm(p[4]-p[8])
+        if distance >= self.release:
+            self.active, self.since = False, None
+        elif not self.active:
+            if distance <= self.close:
+                if self.since is None:
+                    self.since = now
+                self.active = now-self.since >= self.dwell
+            else:
+                self.since = None
+        return self.active
