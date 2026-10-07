@@ -23,16 +23,6 @@
       ]
     },
     {
-      "title": "Ontario Energy Forecasting",
-      "tag": "TIME-SERIES MACHINE LEARNING",
-      "lines": [
-        "Electricity demand using IESO + Open-Meteo.",
-        "Time-series features and seasonal baseline.",
-        "Linear regression and autoregressive approach.",
-        "XGBoost is part of the project plan."
-      ]
-    },
-    {
       "title": "Rocket Simulation",
       "tag": "PHYSICS / NUMERICAL METHODS",
       "lines": [
