@@ -10,7 +10,7 @@ ROOT=Path(__file__).resolve().parent.parent
 class DashboardTests(unittest.TestCase):
     def test_portfolio_wrap_pause_and_toggle(self):
         ui=Dashboard(ROOT/'portfolio.json')
-        ui.action('SWIPE_LEFT');self.assertEqual(ui.card,3)
+        ui.action('SWIPE_LEFT');self.assertEqual(ui.card,len(ui.portfolio['cards'])-1)
         ui.action('SWIPE_RIGHT');self.assertEqual(ui.card,0)
         ui.action('PEACE');self.assertTrue(ui.drawing)
         ui.paused=True;ui.action('SWIPE_RIGHT');ui.action('PEACE')

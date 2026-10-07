@@ -1,10 +1,65 @@
 {
-  "name": "Mohammed",
   "subtitle": "Ontario Tech | Reverse Career Fair",
+  "name": "Mohammed",
   "cards": [
-    {"title": "Hello, I'm Mohammed", "tag": "COMPUTER VISION / HUMAN INTERACTION", "lines": ["Welcome to GestureDesk.", "A real-time interface you can control with your hand.", "Swipe an open palm to explore.", "Press D for the air drawing canvas."]},
-    {"title": "GestureDesk", "tag": "PROJECT SPOTLIGHT", "lines": ["Webcam -> 21 landmarks -> normalized features", "Conservative recognition with an UNKNOWN state", "Temporal dwell, one-shot actions, separate swipes", "Custom classifier with session-based evaluation"]},
-    {"title": "How it works", "tag": "RELIABILITY FIRST", "lines": ["The camera and hand skeleton stay visible.", "Hand loss immediately stops interaction.", "Multiple hands pause the gesture engine.", "Local processing; camera frames are not saved."]},
-    {"title": "Let's connect", "tag": "CUSTOMIZE BEFORE THE FAIR", "lines": ["Add your actual skills and other projects here.", "Add a verified GitHub or LinkedIn address.", "Edit portfolio.json to personalize these cards.", "Keyboard controls work as a presentation fallback."]}
+    {
+      "title": "Hello, I'm Mohammed",
+      "tag": "INTERACTIVE PROJECT PORTFOLIO",
+      "lines": [
+        "Explore my work with an open-palm swipe.",
+        "Mobile apps, machine learning and simulation.",
+        "Hold PEACE to try the air drawing canvas.",
+        "Release your pinch to move without drawing."
+      ]
+    },
+    {
+      "title": "Road Aware",
+      "tag": "FLUTTER / MOBILE SENSORS",
+      "lines": [
+        "Mobile sensor app using accelerometer data.",
+        "CSV replay for repeatable sensor inputs.",
+        "SQLite event logging and driver score.",
+        "Ask me about sensing, replay and app design."
+      ]
+    },
+    {
+      "title": "Ontario Energy Forecasting",
+      "tag": "TIME-SERIES MACHINE LEARNING",
+      "lines": [
+        "Electricity demand using IESO + Open-Meteo.",
+        "Time-series features and seasonal baseline.",
+        "Linear regression and autoregressive approach.",
+        "XGBoost is part of the project plan."
+      ]
+    },
+    {
+      "title": "Rocket Simulation",
+      "tag": "PHYSICS / NUMERICAL METHODS",
+      "lines": [
+        "Thrust, mass flow, drag and gravity.",
+        "Euler / Runge-Kutta numerical integration.",
+        "Apogee analysis and parameter sweeps.",
+        "Ask me about the model and its assumptions."
+      ]
+    },
+    {
+      "title": "GestureDesk",
+      "tag": "COMPUTER VISION / HUMAN INTERACTION",
+      "lines": [
+        "Webcam -> 21 landmarks -> normalized features.",
+        "Custom classifier with session-based testing.",
+        "Open-palm swipes navigate this portfolio.",
+        "PEACE toggles drawing; relaxed pinch inks."
+      ]
+    },
+    {
+      "title": "Let's talk projects",
+      "tag": "ONTARIO TECH / REVERSE CAREER FAIR",
+      "lines": [
+        "Ask me about a project that caught your eye.",
+        "Explore mobile apps, ML and simulation.",
+        "Swipe to revisit a project or try air drawing."
+      ]
+    }
   ]
 }
